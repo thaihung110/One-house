@@ -1,0 +1,218 @@
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: ["server", "/data", "--console-address", ":9001"]
+    networks:
+      - lakehouse-network
+    volumes:
+      - minio_data:/data
+
+  mc:
+    depends_on:
+      - minio
+    image: minio/mc
+    container_name: mc
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc ls minio/bronze || /usr/bin/mc mb minio/bronze;
+      /usr/bin/mc ls minio/silver || /usr/bin/mc mb minio/silver;
+      /usr/bin/mc ls minio/gold || /usr/bin/mc mb minio/gold;
+      echo 'Buckets initialized successfully';
+      "
+    networks:
+      - lakehouse-network
+
+  spark-master:
+    container_name: spark-master
+    build:
+      context: ./Spark
+      dockerfile: Dockerfile
+    entrypoint: ["./entrypoint.sh", "master"]
+    environment:
+      - PYSPARK_SUBMIT_ARGS=--packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1 pyspark-shell
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 20s
+      timeout: 20s
+      retries: 3
+    volumes:
+      - ./Spark/data:/opt/spark/data
+      - ./Spark/apps:/opt/spark/apps
+      - spark-logs:/opt/spark/spark-events
+    env_file:
+      - ./Spark/.env.spark
+    ports:
+      - "9090:8080"
+      - "7077:7077"
+    networks:
+      - lakehouse-network
+
+  spark-worker:
+    # container_name: spark-worker
+    build:
+      context: ./Spark
+      dockerfile: Dockerfile
+    entrypoint: ["./entrypoint.sh", "worker"]
+    depends_on:
+      - spark-master
+    volumes:
+      - ./Spark/data:/opt/spark/data
+      - ./Spark/apps:/opt/spark/apps
+      - spark-logs:/opt/spark/spark-events
+    env_file:
+      - ./Spark/.env.spark
+    networks:
+      - lakehouse-network
+
+  lakekeeper:
+    container_name: lakekeeper
+    image: &lakekeeper-image ${LAKEKEEPER_SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}
+    pull_policy: &lakekeeper-pull-policy always
+    environment: &lakekeeper-environment
+      - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://postgres:postgres@db:5432/postgres
+      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://postgres:postgres@db:5432/postgres
+      - LAKEKEEPER__AUTHZ_BACKEND=allowall
+      # Externally taken from environment variables if set
+      # - LAKEKEEPER__OPENID_PROVIDER_URI
+      # - LAKEKEEPER__OPENID_AUDIENCE
+      # - LAKEKEEPER__OPENID_ADDITIONAL_ISSUERS
+      # - LAKEKEEPER__UI__OPENID_CLIENT_ID
+      # - LAKEKEEPER__UI__OPENID_SCOPE
+    command: ["serve"]
+    healthcheck:
+      test: ["CMD", "/home/nonroot/lakekeeper", "healthcheck"]
+      interval: 20s
+      timeout: 20s
+      retries: 3
+      start_period: 3s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8181:8181"
+    networks:
+      - lakehouse-network
+
+  db:
+    image: postgres:16
+    container_name: db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - PGDATA = /var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -p 5432 -d postgres"]
+      interval: 20s
+      timeout: 20s
+      retries: 2
+      start_period: 10s
+    volumes:
+      - lakekeeper-volume:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    networks:
+      - lakehouse-network
+
+  migrate:
+    container_name: migrate
+    image: *lakekeeper-image
+    pull_policy: *lakekeeper-pull-policy
+    environment: *lakekeeper-environment
+    restart: "no"
+    command: ["migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - lakehouse-network
+
+  bootstrap:
+    image: curlimages/curl
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - -w
+      - "%{http_code}"
+      - "-X"
+      - "POST"
+      - "-v"
+      - "http://lakekeeper:8181/management/v1/bootstrap"
+      - "-H"
+      - "Content-Type: application/json"
+      - "--data"
+      - '{"accept-terms-of-use": true}'
+      - "-o"
+      - "/dev/null"
+      # - "--fail-with-body"
+    networks:
+      - lakehouse-network
+
+  initialwarehouse:
+    image: curlimages/curl
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+      mc:
+        condition: service_completed_successfully
+    restart: "no"
+    command:
+      - -w
+      - "%{http_code}"
+      - "-X"
+      - "POST"
+      - "-v"
+      - "http://lakekeeper:8181/management/v1/warehouse"
+      - "-H"
+      - "Content-Type: application/json"
+      - "--data"
+      - "@/home/curl_user/create-default-warehouse.json"
+      - "-o"
+      - "/dev/null"
+      # - "--fail-with-body"
+    volumes:
+      - ./lakekeeper/create-default-warehouse.json:/home/curl_user/create-default-warehouse.json
+    networks:
+      - lakehouse-network
+
+  trino:
+    container_name: trino
+    image: trinodb/trino:467
+    environment:
+      - CATALOG_MANAGEMENT=dynamic
+    healthcheck:
+      test: ["CMD", "curl", "-I", "http://localhost:8080/v1/status"]
+      interval: 2s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+    ports:
+      - "9999:8080"
+    networks:
+      - lakehouse-network
+    volumes:
+      # Mount thư mục config trên host vào trong container
+      - ./trino/catalog:/etc/trino/catalog
+
+networks:
+  lakehouse-network:
+    name: lakehouse-network
+    driver: bridge
+
+volumes:
+  minio_data:
+  spark-logs:
+  lakekeeper-volume:
