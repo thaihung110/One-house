@@ -9,10 +9,15 @@ services:
       - 9001:9001
       - 9000:9000
     command: ["server", "/data", "--console-address", ":9001"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - lakehouse-network
     volumes:
-      - minio_data:/data
+      - ./volumes/minio-data:/data
 
   mc:
     depends_on:
@@ -31,188 +36,168 @@ services:
     networks:
       - lakehouse-network
 
-  spark-master:
-    container_name: spark-master
-    build:
-      context: ./Spark
-      dockerfile: Dockerfile
-    entrypoint: ["./entrypoint.sh", "master"]
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    container_name: keycloak
     environment:
-      - PYSPARK_SUBMIT_ARGS=--packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1 pyspark-shell
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://shared-db:5432/keycloak_db
+      - KC_DB_USERNAME=keycloak_admin
+      - KC_DB_PASSWORD=keycloak_password
+    volumes:
+      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
-      interval: 20s
-      timeout: 20s
-      retries: 3
-    volumes:
-      - ./Spark/data:/opt/spark/data
-      - ./Spark/apps:/opt/spark/apps
-      - spark-logs:/opt/spark/spark-events
-    env_file:
-      - ./Spark/.env.spark
-    ports:
-      - "9090:8080"
-      - "7077:7077"
-    networks:
-      - lakehouse-network
-
-  spark-worker:
-    # container_name: spark-worker
-    build:
-      context: ./Spark
-      dockerfile: Dockerfile
-    entrypoint: ["./entrypoint.sh", "worker"]
+      test:
+        [
+          "CMD-SHELL",
+          'exec 3<>/dev/tcp/127.0.0.1/8080;echo -e "GET /realms/master/.well-known/openid-configuration HTTP/1.1\r\nhost: 127.0.0.1:8080\r\nConnection: close\r\n\r\n" >&3;grep "jwks_uri"  <&3',
+        ]
+      interval: 2s
+      timeout: 10s
+      retries: 2
+      start_period: 60s
     depends_on:
-      - spark-master
-    volumes:
-      - ./Spark/data:/opt/spark/data
-      - ./Spark/apps:/opt/spark/apps
-      - spark-logs:/opt/spark/spark-events
-    env_file:
-      - ./Spark/.env.spark
+      shared-db:
+        condition: service_healthy
+    ports:
+      - "30080:8080"
+    command:
+      [
+        "start-dev",
+        "--metrics-enabled=true",
+        "--health-enabled=true",
+        "--import-realm",
+        "--verbose",
+        "--log-level=INFO",
+        "--features=token-exchange",
+      ]
     networks:
       - lakehouse-network
 
   lakekeeper:
+    image: ${LAKEKEEPER_TEST__SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}
     container_name: lakekeeper
-    image: &lakekeeper-image ${LAKEKEEPER_SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}
-    pull_policy: &lakekeeper-pull-policy always
-    environment: &lakekeeper-environment
+    pull_policy: always
+    environment:
       - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
-      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://postgres:postgres@db:5432/postgres
-      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://postgres:postgres@db:5432/postgres
-      - LAKEKEEPER__AUTHZ_BACKEND=allowall
-      # Externally taken from environment variables if set
-      # - LAKEKEEPER__OPENID_PROVIDER_URI
-      # - LAKEKEEPER__OPENID_AUDIENCE
-      # - LAKEKEEPER__OPENID_ADDITIONAL_ISSUERS
-      # - LAKEKEEPER__UI__OPENID_CLIENT_ID
-      # - LAKEKEEPER__UI__OPENID_SCOPE
+      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://lakekeeper_admin:lakekeeper_password@shared-db:5432/lakekeeper_db
+      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://lakekeeper_admin:lakekeeper_password@shared-db:5432/lakekeeper_db
+      - LAKEKEEPER__AUTHZ_BACKEND=openfga
+      - LAKEKEEPER__OPENFGA__ENDPOINT=http://openfga:8081
+      - LAKEKEEPER__OPENID_PROVIDER_URI=http://keycloak:8080/realms/iceberg
+      - LAKEKEEPER__OPENID_ADDITIONAL_ISSUERS=http://localhost:30080/realms/iceberg
+      - LAKEKEEPER__OPENID_AUDIENCE=lakekeeper
+      - LAKEKEEPER__UI__OPENID_CLIENT_ID=lakekeeper
+      - LAKEKEEPER__UI__OPENID_PROVIDER_URI=http://localhost:30080/realms/iceberg
+      - RUST_LOG=info
     command: ["serve"]
     healthcheck:
       test: ["CMD", "/home/nonroot/lakekeeper", "healthcheck"]
-      interval: 20s
-      timeout: 20s
+      interval: 1s
+      timeout: 10s
       retries: 3
       start_period: 3s
     depends_on:
       migrate:
         condition: service_completed_successfully
+      shared-db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     ports:
       - "8181:8181"
     networks:
       - lakehouse-network
 
-  db:
+  migrate:
+    image: ${LAKEKEEPER_TEST__SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}
+    container_name: migrate
+    pull_policy: always
+    environment:
+      - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://lakekeeper_admin:lakekeeper_password@shared-db:5432/lakekeeper_db
+      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://lakekeeper_admin:lakekeeper_password@shared-db:5432/lakekeeper_db
+      - LAKEKEEPER__AUTHZ_BACKEND=openfga
+      - LAKEKEEPER__OPENFGA__ENDPOINT=http://openfga:8081
+      - RUST_LOG=info
+    restart: "no"
+    entrypoint: ["/home/nonroot/lakekeeper", "migrate"]
+    depends_on:
+      shared-db:
+        condition: service_healthy
+      openfga:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mc:
+        condition: service_completed_successfully
+    networks:
+      - lakehouse-network
+
+  shared-db:
     image: postgres:16
-    container_name: db
+    container_name: shared-db
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - PGDATA = /var/lib/postgresql/data/pgdata
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - shared-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -p 5432 -d postgres"]
       interval: 20s
       timeout: 20s
       retries: 2
       start_period: 10s
-    volumes:
-      - lakekeeper-volume:/var/lib/postgresql/data
     ports:
       - 5432:5432
     networks:
       - lakehouse-network
 
-  migrate:
-    container_name: migrate
-    image: *lakekeeper-image
-    pull_policy: *lakekeeper-pull-policy
-    environment: *lakekeeper-environment
-    restart: "no"
-    command: ["migrate"]
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - lakehouse-network
-
-  bootstrap:
-    image: curlimages/curl
-    depends_on:
-      lakekeeper:
-        condition: service_healthy
-    restart: "no"
-    command:
-      - -w
-      - "%{http_code}"
-      - "-X"
-      - "POST"
-      - "-v"
-      - "http://lakekeeper:8181/management/v1/bootstrap"
-      - "-H"
-      - "Content-Type: application/json"
-      - "--data"
-      - '{"accept-terms-of-use": true}'
-      - "-o"
-      - "/dev/null"
-      # - "--fail-with-body"
-    networks:
-      - lakehouse-network
-
-  initialwarehouse:
-    image: curlimages/curl
-    depends_on:
-      lakekeeper:
-        condition: service_healthy
-      bootstrap:
-        condition: service_completed_successfully
-      mc:
-        condition: service_completed_successfully
-    restart: "no"
-    command:
-      - -w
-      - "%{http_code}"
-      - "-X"
-      - "POST"
-      - "-v"
-      - "http://lakekeeper:8181/management/v1/warehouse"
-      - "-H"
-      - "Content-Type: application/json"
-      - "--data"
-      - "@/home/curl_user/create-default-warehouse.json"
-      - "-o"
-      - "/dev/null"
-      # - "--fail-with-body"
-    volumes:
-      - ./lakekeeper/create-default-warehouse.json:/home/curl_user/create-default-warehouse.json
-    networks:
-      - lakehouse-network
-
-  trino:
-    container_name: trino
-    image: trinodb/trino:467
+  openfga-migrate:
+    image: openfga/openfga:v1.8
+    container_name: openfga-migrate
+    command: migrate
     environment:
-      - CATALOG_MANAGEMENT=dynamic
-    healthcheck:
-      test: ["CMD", "curl", "-I", "http://localhost:8080/v1/status"]
-      interval: 2s
-      timeout: 10s
-      retries: 2
-      start_period: 10s
-    ports:
-      - "9999:8080"
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://openfga_admin:openfga_password@shared-db:5432/openfga_db?sslmode=disable
+    depends_on:
+      shared-db:
+        condition: service_healthy
     networks:
       - lakehouse-network
-    volumes:
-      # Mount thư mục config trên host vào trong container
-      - ./trino/catalog:/etc/trino/catalog
+
+  openfga:
+    image: openfga/openfga:v1.8
+    container_name: openfga
+    command: run
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://openfga_admin:openfga_password@shared-db:5432/openfga_db?sslmode=disable
+      - OPENFGA_DATASTORE_MAX_OPEN_CONNS=50
+      - OPENFGA_PLAYGROUND_ENABLED=false
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=openfga:8081"]
+      interval: 5s
+      timeout: 30s
+      retries: 3
+    depends_on:
+      shared-db:
+        condition: service_healthy
+      openfga-migrate:
+        condition: service_completed_successfully
+    networks:
+      - lakehouse-network
+
+volumes:
+  shared-db-data:
 
 networks:
   lakehouse-network:
     name: lakehouse-network
     driver: bridge
-
-volumes:
-  minio_data:
-  spark-logs:
-  lakekeeper-volume:

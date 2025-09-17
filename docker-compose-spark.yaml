@@ -1,0 +1,47 @@
+services:
+  spark-master:
+    container_name: spark-master
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    entrypoint: ["./entrypoint.sh", "master"]
+    environment:
+      - PYSPARK_SUBMIT_ARGS=--packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1 pyspark-shell
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 20s
+      timeout: 20s
+      retries: 3
+    volumes:
+      - ./spark/data:/opt/spark/data
+      - ./spark/apps:/opt/spark/apps
+      - ./spark/spark-logs:/opt/spark/spark-events
+    env_file:
+      - ./spark/.env.spark
+    ports:
+      - "9090:8080"
+      - "7077:7077"
+    networks:
+      - lakehouse-network
+
+  spark-worker:
+    # container_name: spark-worker
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    entrypoint: ["./entrypoint.sh", "worker"]
+    depends_on:
+      - spark-master
+    volumes:
+      - ./spark/data:/opt/spark/data
+      - ./spark/apps:/opt/spark/apps
+      - ./spark/spark-logs:/opt/spark/spark-events
+    env_file:
+      - ./spark/.env.spark
+    networks:
+      - lakehouse-network
+
+networks:
+  lakehouse-network:
+    name: lakehouse-network
+    driver: bridge
