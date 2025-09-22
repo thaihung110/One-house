@@ -1,1 +1,8 @@
 create-catalog.sql
+.env
+kcadm_cmd.txt
+cmd.txt
+test_api_keycloak.ipynb
+Spark.ipynb
+create-warehouse.ipynb
+boostrap.ipynb
