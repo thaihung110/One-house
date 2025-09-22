@@ -7,3 +7,6 @@ Spark.ipynb
 create-warehouse.ipynb
 boostrap.ipynb
 spark/spark-logs/*
+spark/apps/.ipynb_checkpoints/*
+spark/apps/utils/__pycache__/*
+spark/.env.spark
