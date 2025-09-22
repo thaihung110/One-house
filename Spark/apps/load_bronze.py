@@ -30,7 +30,7 @@ logger.info(f"SPARK_MINOR_VERSION: {SPARK_MINOR_VERSION}")
 logger.info(f"ICEBERG_VERSION: {ICEBERG_VERSION}")
 
 # Register spark client in lakekeeper
-client_id, app_client_secret = register_spark_client(APP_CLIENT_ID)
+app_client_id, app_client_secret = register_spark_client(APP_CLIENT_ID)
 
 spark_jars_packages = (
     f"org.apache.iceberg:iceberg-spark-runtime-{SPARK_MINOR_VERSION}_2.12:{ICEBERG_VERSION}",

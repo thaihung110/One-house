@@ -145,4 +145,4 @@ def register_spark_client(app_client_id: str) -> tuple[str, str]:
         response_post.raise_for_status()
         logger.info(f"Assigned project_admin role for client {app_client_id}")
 
-    return client_id, app_client_secret
+    return app_client_id, app_client_secret
