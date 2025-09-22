@@ -1,4 +1,16 @@
 services:
+  jupyter:
+    image: quay.io/jupyter/pyspark-notebook:2024-10-14
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+    command: start-notebook.sh --NotebookApp.token=''
+    volumes:
+      - ./spark/apps:/home/jovyan/examples/
+    networks:
+      - lakehouse-network
+    ports:
+      - "8888:8888"
   minio:
     image: minio/minio
     container_name: minio
@@ -17,7 +29,7 @@ services:
     networks:
       - lakehouse-network
     volumes:
-      - ./volumes/minio-data:/data
+      - minio-data:/data
 
   mc:
     depends_on:
@@ -48,6 +60,8 @@ services:
       - KC_DB_PASSWORD=keycloak_password
     volumes:
       - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json
+      - ./keycloak/create-iceberg-admin.sh:/opt/keycloak/create-iceberg-admin.sh
+      - ./keycloak/entrypoint.sh:/opt/keycloak/entrypoint.sh
     healthcheck:
       test:
         [
@@ -61,6 +75,7 @@ services:
     depends_on:
       shared-db:
         condition: service_healthy
+    entrypoint: ["/bin/bash", "/opt/keycloak/entrypoint.sh"]
     ports:
       - "30080:8080"
     command:
@@ -105,6 +120,8 @@ services:
       shared-db:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      keycloak:
         condition: service_healthy
     ports:
       - "8181:8181"
@@ -194,8 +211,45 @@ services:
     networks:
       - lakehouse-network
 
+  lakekeeper-bootstrap:
+    container_name: lakekeeper-bootstrap
+    image: python:3.11-slim
+    volumes:
+      - ./bootstrap/bootstrap.py:/app/bootstrap.py # mount file local into container
+    working_dir: /app
+    command: >
+      sh -c "pip install requests pyjwt &&
+      python bootstrap.py"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      lakekeeper:
+        condition: service_healthy
+    restart: "no" # exit when complete
+    networks:
+      - lakehouse-network
+
+  create-warehouse:
+    container_name: create-warehouse
+    image: python:3.11-slim
+    volumes:
+      - ./create-warehouse/create-warehouse.py:/app/create-warehouse.py # mount file local into container
+    working_dir: /app
+    command: >
+      sh -c "pip install boto3 requests &&
+      python create-warehouse.py"
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: "no" # exit when complete
+    networks:
+      - lakehouse-network
+
 volumes:
   shared-db-data:
+  minio-data:
 
 networks:
   lakehouse-network:

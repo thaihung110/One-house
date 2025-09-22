@@ -38,7 +38,7 @@ FROM spark-base as pyspark
 
 # Install python deps
 COPY requirements.txt .
-RUN pip3 install -r requirements.txt
+RUN pip3 install --prefer-binary -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 ENV PATH="/opt/spark/sbin:/opt/spark/bin:${PATH}"
 ENV SPARK_HOME="/opt/spark"
@@ -55,5 +55,6 @@ RUN chmod u+x /opt/spark/sbin/* && \
 ENV PYTHONPATH=$SPARK_HOME/python/:$PYTHONPATH
 
 COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
 ENTRYPOINT ["./entrypoint.sh"]
