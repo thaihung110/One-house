@@ -1,18 +1,134 @@
-trino:
-  container_name: trino
-  image: trinodb/trino:467
-  environment:
-    - CATALOG_MANAGEMENT=dynamic
-  healthcheck:
-    test: ["CMD", "curl", "-I", "http://localhost:8080/v1/status"]
-    interval: 2s
-    timeout: 10s
-    retries: 2
-    start_period: 10s
-  ports:
-    - "9999:8080"
-  networks:
-    - lakehouse-network
-  volumes:
-    # Mount thư mục config trên host vào trong container
-    - ./trino/catalog:/etc/trino/catalog
+services:
+  # init-client-opa:
+  #   build:
+  #     context: ./opa
+  #     dockerfile: Dockerfile
+  #   container_name: init-client-opa
+  #   volumes:
+  #     - ./opa/.env.opa:/app/.env.opa
+  #   networks:
+  #     - lakehouse-network
+  #   depends_on:
+  #     keycloak:
+  #       condition: service_healthy
+  #   restart: "no"
+
+  opa:
+    container_name: opa
+    image: openpolicyagent/opa:1.0.0
+    extra_hosts:
+      - "localhost:host-gateway" # Allow container to access host's localhost for Keycloak
+    command:
+      [
+        "run",
+        "--server",
+        "--log-format",
+        "text",
+        "--log-level",
+        "debug",
+        "--addr",
+        "0.0.0.0:8181",
+        "/policies",
+      ]
+    volumes:
+      - ./opa/policies:/policies
+    env_file:
+      - ./opa/.env.opa
+    networks:
+      - lakehouse-network
+    environment:
+      - LAKEKEEPER_URL=http://lakekeeper:8181
+      - LAKEKEEPER_TOKEN_ENDPOINT=http://localhost:30080/realms/iceberg/protocol/openid-connect/token
+      - LAKEKEEPER_SCOPE=lakekeeper
+      - TRINO_LAKEKEEPER_CATALOG_NAME=lakekeeper
+      - LAKEKEEPER_LAKEKEEPER_WAREHOUSE=bronze
+    depends_on:
+      rbac-api:
+        condition: service_started
+      # init-client-opa:
+      #   condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+
+  trino-opa:
+    image: trinodb/trino:467
+    container_name: trino-opa
+    extra_hosts:
+      - "localhost:host-gateway" # Allow container to access host's localhost
+    environment:
+      - OIDC_ISSUER=http://localhost:30080/realms/iceberg
+    healthcheck:
+      test: ["CMD", "curl", "-I", "http://localhost:8080/v1/status"]
+      interval: 2s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
+    networks:
+      - lakehouse-network
+    volumes:
+      - ./trino/etc/access-control.properties:/etc/trino/access-control.properties
+      - ./trino/etc/config.properties:/etc/trino/config.properties
+      - ./trino/etc/log.properties:/etc/trino/log.properties
+      - ./trino/etc/password-authenticator.properties:/etc/trino/password-authenticator.properties
+    depends_on:
+      openldap:
+        condition: service_started
+
+  # Emulates a reverse proxy that secures the connection to the server.
+  # This is required as trino requires HTTPS in OAUTH2 settings (rightfully so!)
+  trino-proxy:
+    image: nginx
+    container_name: trino-proxy
+    ports:
+      - 443:443
+      - 38191:38191
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./certs:/etc/nginx/certs
+    networks:
+      - lakehouse-network
+
+  rbac-db:
+    image: postgres:17
+    container_name: rbac-db
+    environment:
+      - POSTGRES_USER=rbac
+      - POSTGRES_PASSWORD=rbac
+      - POSTGRES_DB=rbac
+    volumes:
+      - ./rbac-api/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - lakehouse-network
+
+  rbac-api:
+    build: ./rbac-api
+    container_name: rbac-api
+    environment:
+      - DB_DSN=postgresql+asyncpg://rbac:rbac@rbac-db/rbac
+    depends_on:
+      rbac-db:
+        condition: service_started
+    networks:
+      - lakehouse-network
+
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap
+    environment:
+      - LDAP_ORGANISATION=Example Org
+      - LDAP_DOMAIN=example.org
+      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_TLS=false
+      - LDAP_REMOVE_CONFIG_AFTER_SETUP=false
+    volumes:
+      - ./ldap/bootstrap:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    networks:
+      - lakehouse-network
+
+networks:
+  lakehouse-network:
+    name: lakehouse-network

@@ -10,3 +10,7 @@ spark/spark-logs/*
 spark/apps/.ipynb_checkpoints/*
 spark/apps/utils/__pycache__/*
 spark/.env.spark
+notebooks/
+certs/
+starrocks/starrocks-test.ipynb
+insert-data.sql

@@ -2,20 +2,13 @@ import json
 import logging
 
 import pandas as pd
-
-# import pyspark
 import requests
-
-# from pyspark.conf import SparkConf
-# from pyspark.sql import SparkSession
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-CATALOG_URL = "http://lakekeeper:8181/catalog"
-WAREHOUSE = "bronze"
 
 KEYCLOAK_TOKEN_URL = (
     "http://keycloak:8080/realms/iceberg/protocol/openid-connect/token"
@@ -29,12 +22,15 @@ ADMIN_USER = "admin-new"
 ADMIN_PASS = "admin"
 CLIENT_ID = "lakekeeper"
 
+APP_CLIENT_ID = "trino"
+
 
 def register_spark_client(app_client_id: str) -> tuple[str, str]:
     """
     Register spark client in lakekeeper
     """
 
+    app_client_secret = ""
     # 1. Get admin token
     resp = requests.post(
         url=KEYCLOAK_TOKEN_URL,
@@ -148,3 +144,11 @@ def register_spark_client(app_client_id: str) -> tuple[str, str]:
         logger.info(f"Assigned project_admin role for client {app_client_id}")
 
     return app_client_id, app_client_secret
+
+
+if __name__ == "__main__":
+    app_client_id, app_client_secret = register_spark_client(APP_CLIENT_ID)
+
+    with open(".env.opa", "w") as f:
+        f.write(f"LAKEKEEPER_CLIENT_ID={app_client_id}\n")
+        f.write(f"LAKEKEEPER_CLIENT_SECRET={app_client_secret}\n")

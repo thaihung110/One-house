@@ -1,0 +1,10 @@
+dn: ou=people,dc=example,dc=org
+objectClass: organizationalUnit
+ou: people
+
+dn: uid=hung,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: hung
+sn: hung
+cn: hung
+userPassword: hung

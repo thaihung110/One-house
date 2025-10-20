@@ -6,11 +6,13 @@ services:
         condition: service_healthy
     command: start-notebook.sh --NotebookApp.token=''
     volumes:
-      - ./spark/apps:/home/jovyan/examples/
+      # - ./spark/apps:/home/jovyan/examples/
+      - ./notebooks:/home/jovyan/examples
     networks:
       - lakehouse-network
     ports:
       - "8888:8888"
+
   minio:
     image: minio/minio
     container_name: minio
@@ -254,4 +256,3 @@ volumes:
 networks:
   lakehouse-network:
     name: lakehouse-network
-    driver: bridge
