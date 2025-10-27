@@ -21,3 +21,14 @@ BEGIN
     END IF;
 END$$;
 
+CREATE TABLE policy (
+    id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL,
+    catalog TEXT,
+    schema_name TEXT,
+    table_name TEXT,
+    columns TEXT[],
+    actions privilege_enum[]
+);
+
+
