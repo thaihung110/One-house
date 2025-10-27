@@ -1,0 +1,18 @@
+docker exec -it openldap bash
+
+cat > /tmp/alice.ldif << 'EOF'
+dn: uid=alice,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: person
+objectClass: top
+uid: alice
+sn: alice
+cn: alice
+givenName: alice
+mail: alice@example.org
+userPassword: alice
+EOF
+
+ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/alice.ldif
+
+ldapsearch -x -D "cn=admin,dc=example,dc=org" -w admin -b "ou=people,dc=example,dc=org" "(uid=alice)"
