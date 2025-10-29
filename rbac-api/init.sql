@@ -31,4 +31,7 @@ CREATE TABLE policy (
     actions privilege_enum[]
 );
 
+INSERT INTO policy (username, catalog, schema_name, table_name, columns, actions)
+VALUES ('hung', NULL, NULL, NULL, NULL, ARRAY['ALL']::privilege_enum[]);
+
 

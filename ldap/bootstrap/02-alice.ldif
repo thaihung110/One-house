@@ -1,0 +1,13 @@
+dn: uid=alice,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: person
+objectClass: top
+uid: alice
+sn: alice
+cn: alice
+givenName: alice
+mail: alice@example.org
+userPassword: alice
+
+
+

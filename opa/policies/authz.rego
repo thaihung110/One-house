@@ -133,6 +133,24 @@ allow if {
     field_matches(policy.catalog, catalog_name)
 }
 
+# ShowSchemas - alternative input shape where catalog is provided directly
+allow if {
+    input.action.operation == "ShowSchemas"
+    catalog_name := input.action.resource.catalog.name
+    some policy in user_policies
+    field_matches(policy.catalog, catalog_name)
+}
+
+# FilterSchemas - filter schemas based on user permissions
+allow if {
+    input.action.operation == "FilterSchemas"
+    catalog_name := input.action.resource.schema.catalogName
+    schema_name := input.action.resource.schema.schemaName
+    some policy in user_policies
+    field_matches(policy.catalog, catalog_name)
+    field_matches(policy.schema_name, schema_name)
+}
+
 # CreateSchema - requires CREATE_SCHEMA or ALL privilege
 allow if {
     input.action.operation == "CreateSchema"
