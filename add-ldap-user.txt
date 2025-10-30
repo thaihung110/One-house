@@ -7,8 +7,6 @@ uid: admin
 userPassword: admin
 EOF
 
-ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/add-admin2.ldif
+ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/add-admin.ldif
 
-ldapsearch -x -H ldap://localhost -b "ou=people,dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w admin "(uid=admin2)"
-
-ldapdelete -x -D "cn=admin,dc=example,dc=org" -w admin "uid=admin2,ou=people,dc=example,dc=org"
+ldapsearch -x -H ldap://localhost -b "ou=people,dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w admin "(uid=admin)"
