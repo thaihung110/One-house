@@ -1,41 +1,14 @@
-docker exec -it openldap bash
-
-cat > /tmp/alice.ldif << 'EOF'
-dn: uid=alice,ou=people,dc=example,dc=org
-objectClass: inetOrgPerson
-objectClass: person
-objectClass: top
-uid: alice
-sn: alice
-cn: alice
-givenName: alice
-mail: alice@example.org
-userPassword: alice
-EOF
-
-ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/alice.ldif
-
-ldapsearch -x -D "cn=admin,dc=example,dc=org" -w admin -b "ou=people,dc=example,dc=org" "(uid=alice)"
-
-
-
-ldapsearch -x -H ldap://localhost -b "dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w admin "(objectClass=person)"
-
-
 cat > /tmp/add-admin.ldif <<EOF
-dn: uid=admin,dc=example,dc=org
+dn: uid=admin,ou=people,dc=example,dc=org
 objectClass: inetOrgPerson
-objectClass: posixAccount
-objectClass: top
 cn: admin
 sn: admin
 uid: admin
-uidNumber: 1001
-gidNumber: 1001
-homeDirectory: /home/admin
 userPassword: admin
 EOF
 
-ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/add-admin.ldif
+ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/add-admin2.ldif
 
-ldapsearch -x -H ldap://localhost -b "dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w admin "(uid=admin)"
+ldapsearch -x -H ldap://localhost -b "ou=people,dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w admin "(uid=admin2)"
+
+ldapdelete -x -D "cn=admin,dc=example,dc=org" -w admin "uid=admin2,ou=
