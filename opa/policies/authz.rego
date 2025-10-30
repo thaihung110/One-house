@@ -209,6 +209,16 @@ allow if {
     field_matches(policy.schema_name, schema_name)
 }
 
+# FilterTables - filter tables based on user permissions
+allow if {
+    input.action.operation == "FilterTables"
+    catalog_name := input.action.resource.table.catalogName
+    schema_name := input.action.resource.table.schemaName
+    some policy in user_policies
+    field_matches(policy.catalog, catalog_name)
+    field_matches(policy.schema_name, schema_name)
+}
+
 # ShowColumns - check table permission
 allow if {
     input.action.operation == "ShowColumns"
