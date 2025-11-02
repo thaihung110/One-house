@@ -74,6 +74,7 @@ services:
       - ./trino/etc/config.properties:/etc/trino/config.properties
       - ./trino/etc/log.properties:/etc/trino/log.properties
       - ./trino/etc/password-authenticator.properties:/etc/trino/password-authenticator.properties
+      - ./trino/etc/catalog:/etc/trino/catalog
     depends_on:
       openldap:
         condition: service_started
