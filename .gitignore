@@ -14,3 +14,4 @@ notebooks/
 
 starrocks/starrocks-test.ipynb
 insert-data.sql
+openldap/data/*

@@ -78,6 +78,23 @@ services:
       openldap:
         condition: service_started
 
+  trino-noauth:
+    image: trinodb/trino:467
+    container_name: trino-noauth
+    ports:
+      - 8081:8080
+    networks:
+      - lakehouse-network
+    volumes:
+      - ./trino/etc/log.properties:/etc/trino/log.properties
+      - ./trino/etc/config-noauth.properties:/etc/trino/config.properties
+    healthcheck:
+      test: ["CMD", "curl", "-I", "http://localhost:8080/v1/status"]
+      interval: 2s
+      timeout: 10s
+      retries: 2
+      start_period: 10s
+
   # Emulates a reverse proxy that secures the connection to the server.
   # This is required as trino requires HTTPS in OAUTH2 settings (rightfully so!)
   trino-proxy:
@@ -125,7 +142,7 @@ services:
       - LDAP_TLS=false
       - LDAP_REMOVE_CONFIG_AFTER_SETUP=false
     volumes:
-      - ./ldap/bootstrap:/container/service/slapd/assets/config/bootstrap/ldif/custom
+      - ./openldap/data:/var/lib/ldap
     networks:
       - lakehouse-network
 

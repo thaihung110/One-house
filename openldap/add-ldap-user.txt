@@ -1,0 +1,36 @@
+cat > /tmp/create-ou.ldif <<EOF
+dn: ou=people,dc=example,dc=org
+objectCLass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=example,dc=org
+objectClass: organizationalUnit
+ou: groups
+EOF
+
+ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/create-ou.ldif
+
+
+cat > /tmp/add-admin.ldif <<EOF 
+dn: uid=admin,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: admin
+sn: admin
+uid: admin
+userPassword: admin
+EOF
+
+ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/add-admin.ldif
+
+ldapsearch -x -H ldap://localhost -b "ou=people,dc=example,dc=org" -D "cn=admin,dc=example,dc=org" -w admin "(uid=admin)"
+
+cat > /tmp/add-hung.ldif <<EOF
+dn: uid=hung,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: hung
+sn: hung
+uid: hung
+userPassword: hung
+EOF
+
+ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/add-hung.ldif
