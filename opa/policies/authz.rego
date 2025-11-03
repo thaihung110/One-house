@@ -125,14 +125,6 @@ allow if {
 # SCHEMA-LEVEL OPERATIONS
 #------------------------------------------------------------------------------
 
-# ShowSchemas - check catalog permission
-allow if {
-    input.action.operation == "ShowSchemas"
-    catalog_name := input.action.resource.schema.catalogName
-    some policy in user_policies
-    field_matches(policy.catalog, catalog_name)
-}
-
 # ShowSchemas - alternative input shape where catalog is provided directly
 allow if {
     input.action.operation == "ShowSchemas"
@@ -214,9 +206,11 @@ allow if {
     input.action.operation == "FilterTables"
     catalog_name := input.action.resource.table.catalogName
     schema_name := input.action.resource.table.schemaName
+    table_name := input.action.resource.table.tableName
     some policy in user_policies
     field_matches(policy.catalog, catalog_name)
     field_matches(policy.schema_name, schema_name)
+    field_matches(policy.table_name, table_name)
 }
 
 # ShowColumns - check table permission
@@ -229,6 +223,20 @@ allow if {
     field_matches(policy.catalog, catalog_name)
     field_matches(policy.schema_name, schema_name)
     field_matches(policy.table_name, table_name)
+}
+
+# FilterColumns - filter columns based on user permissions
+allow if {
+    input.action.operation == "FilterColumns"
+    catalog_name := input.action.resource.table.catalogName
+    schema_name := input.action.resource.table.schemaName
+    table_name := input.action.resource.table.tableName
+    requested_columns := input.action.resource.table.columns
+    some policy in user_policies
+    field_matches(policy.catalog, catalog_name)
+    field_matches(policy.schema_name, schema_name)
+    field_matches(policy.table_name, table_name)
+    columns_allowed(requested_columns, policy.columns)
 }
 
 # CreateTable - requires CREATE_TABLE or ALL privilege
