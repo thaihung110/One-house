@@ -1,3 +1,4 @@
+```bash
 cat > /tmp/create-ou.ldif <<EOF
 dn: ou=people,dc=example,dc=org
 objectCLass: organizationalUnit
@@ -11,7 +12,7 @@ EOF
 ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/create-ou.ldif
 
 
-cat > /tmp/add-admin.ldif <<EOF 
+cat > /tmp/add-admin.ldif <<EOF
 dn: uid=admin,ou=people,dc=example,dc=org
 objectClass: inetOrgPerson
 cn: admin
@@ -34,3 +35,16 @@ userPassword: hung
 EOF
 
 ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/add-hung.ldif
+
+cat > /tmp/add-alice.ldif <<EOF
+dn: uid=alice,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: alice
+sn: alice
+uid: alice
+userPassword: alice
+EOF
+
+ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/add-alice.ldif
+
+```

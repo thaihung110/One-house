@@ -3,10 +3,8 @@ import json
 import jwt
 import requests
 
-KEYCLOAK_TOKEN_URL = (
-    "http://keycloak:8080/realms/iceberg/protocol/openid-connect/token"
-)
-MANAGEMENT_URL = "http://lakekeeper:8181/management"
+KEYCLOAK_TOKEN_URL = "https://openhouse.keycloak.test/realms/iceberg/protocol/openid-connect/token"
+MANAGEMENT_URL = "https://openhouse.lakekeeper.test/management"
 
 # 1. get token with user admin-new and client lakekeeper
 response = requests.post(
@@ -14,7 +12,7 @@ response = requests.post(
     data={
         "grant_type": "password",
         "client_id": "lakekeeper",
-        "username": "admin-new",
+        "username": "admin",
         "password": "admin",
     },
     headers={"Content-type": "application/x-www-form-urlencoded"},

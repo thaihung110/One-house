@@ -256,3 +256,4 @@ volumes:
 networks:
   lakehouse-network:
     name: lakehouse-network
+    driver: bridge

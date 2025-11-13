@@ -16,6 +16,7 @@ BEGIN
             'DROP_SCHEMA',
             'CREATE_CATALOG',
             'DROP_CATALOG',
+            'ACCESS_CATALOG',
             'ALL'
         );
     END IF;

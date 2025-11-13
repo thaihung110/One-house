@@ -16,3 +16,8 @@ starrocks/starrocks-test.ipynb
 insert-data.sql
 openldap/data/*
 authz_backup.rego
+results1.bin
+body1.json
+vegeta_test_targets.txt
+openldap/config/*
+.idea/*
