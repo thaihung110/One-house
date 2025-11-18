@@ -21,3 +21,5 @@ body1.json
 vegeta_test_targets.txt
 openldap/config/*
 .idea/*
+
+trino/etc/catalog/*

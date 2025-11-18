@@ -174,7 +174,7 @@ services:
       retries: 2
       start_period: 10s
     ports:
-      - 5432:5432
+      - 5434:5432
     networks:
       - lakehouse-network
 

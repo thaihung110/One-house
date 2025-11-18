@@ -119,13 +119,16 @@ services:
       - POSTGRES_USER=rbac
       - POSTGRES_PASSWORD=rbac
       - POSTGRES_DB=rbac
+    ports:
+      - 5433:5432
     volumes:
-      - ./rbac-api/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./rbac-db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - rbac-db-data:/var/lib/postgresql/data
     networks:
       - lakehouse-network
 
   rbac-api:
-    build: ./rbac-api
+    image: hungvt0110/rbac-api:latest
     container_name: rbac-api
     environment:
       - DB_DSN=postgresql+asyncpg://rbac:rbac@rbac-db/rbac
@@ -156,3 +159,6 @@ networks:
   lakehouse-network:
     name: lakehouse-network
     external: true
+
+volumes:
+  rbac-db-data:
