@@ -1,0 +1,65 @@
+# Flink Application Cluster Configuration
+
+# JobManager
+jobmanager.rpc.address: flink-jobmanager
+jobmanager.rpc.port: 6123
+jobmanager.memory.process.size: 2048m
+
+# TaskManager
+taskmanager.memory.process.size: 4096m
+taskmanager.numberOfTaskSlots: 4
+
+# Execution
+parallelism.default: 1
+execution.runtime-mode: streaming
+
+# Checkpointing (using MinIO for persistent storage)
+execution.checkpointing.interval: 60s
+execution.checkpointing.mode: EXACTLY_ONCE
+execution.checkpointing.timeout: 15min
+execution.checkpointing.min-pause: 30s
+execution.checkpointing.max-concurrent-checkpoints: 1
+state.backend: rocksdb
+state.checkpoints.dir: s3://bronze/flink-checkpoints
+state.savepoints.dir: s3://bronze/flink-savepoints
+state.checkpoints.num-retained: 2
+
+# State Backend
+state.backend.incremental: true
+state.backend.rocksdb.timer-service.factory: ROCKSDB
+
+# High Availability (disabled for single-node)
+high-availability: none
+
+# Rest API
+rest.port: 8081
+rest.address: 0.0.0.0
+
+# Logging
+env.log.dir: /opt/flink/log
+env.log.level: INFO
+
+# S3 Configuration for MinIO
+s3.endpoint: http://minio:9000
+s3.access-key: admin
+s3.secret-key: password
+s3.path.style.access: true
+s3.connection.timeout: 60000
+s3.socket.timeout: 60000
+
+# Network Configuration
+heartbeat.timeout: 60000
+heartbeat.interval: 15000
+akka.ask.timeout: 60000
+
+# Restart Strategy
+restart-strategy: fixed-delay
+restart-strategy.fixed-delay.attempts: 3
+restart-strategy.fixed-delay.delay: 30000
+
+# Iceberg Configuration
+table.exec.iceberg.use-flip27-source: true
+
+# Resource Configuration
+slot.request.timeout: 300000
+slot.idle.timeout: 60000

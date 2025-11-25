@@ -1,0 +1,102 @@
+services:
+  flink-jobmanager:
+    build:
+      context: ./flink-app
+      dockerfile: Dockerfile
+    container_name: flink-jobmanager
+    hostname: flink-jobmanager
+    command: >
+      bash -c "
+        # Start JobManager
+        /opt/flink/bin/jobmanager.sh start-foreground &
+        
+        # Wait for JobManager to be ready
+        echo 'Waiting for JobManager to be ready...'
+        sleep 15
+        
+        # Submit the Python job
+        echo '========================================='
+        echo 'Submitting Flink job: Kafka → Iceberg Bronze'
+        echo '========================================='
+        /opt/flink/bin/flink run -py /opt/flink/jobs/kafka_to_iceberg.py -d
+        
+        echo 'Flink job submitted successfully!'
+        echo 'Check Web UI at http://localhost:8084'
+        
+        # Keep container running
+        wait
+      "
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - PYFLINK_CLIENT_EXECUTABLE=python3
+      - PYFLINK_PYTHON=python3
+      # Kafka configuration
+      - KAFKA_BOOTSTRAP_SERVERS=kafka1:9092,kafka2:9092
+      - KAFKA_TOPIC=nyc-taxi-data
+      # Lakekeeper configuration
+      - CATALOG_URL=http://lakekeeper:8181/catalog
+      - WAREHOUSE=bronze
+      - FLINK_CLIENT_ID=flink
+      - FLINK_CLIENT_SECRET=Wnrp0vD0ogkyP5dJxBlj1iYIPu2PTrAq
+      - KEYCLOAK_TOKEN_URL=http://keycloak:8080/realms/iceberg/protocol/openid-connect/token
+      - OAUTH_SCOPE=lakekeeper
+      # MinIO S3 configuration
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password
+      # Iceberg table
+      - ICEBERG_TABLE=lakekeeper.bronze.nyc_taxi_raw
+    ports:
+      - "8084:8081" # Flink Web UI
+      - "6123:6123" # Flink RPC
+    healthcheck:
+      test: curl -f http://localhost:8081 || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lakehouse-network
+    volumes:
+      - flink-checkpoints:/tmp/flink-checkpoints
+
+  flink-taskmanager:
+    build:
+      context: ./flink-app
+      dockerfile: Dockerfile
+    container_name: flink-taskmanager
+    hostname: flink-taskmanager
+    command: taskmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - PYFLINK_CLIENT_EXECUTABLE=python3
+      - PYFLINK_PYTHON=python3
+      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=4
+      # Kafka configuration
+      - KAFKA_BOOTSTRAP_SERVERS=kafka1:9092,kafka2:9092
+      - KAFKA_TOPIC=nyc-taxi-data
+      # Lakekeeper configuration
+      - CATALOG_URL=http://lakekeeper:8181/catalog
+      - WAREHOUSE=bronze
+      - FLINK_CLIENT_ID=flink
+      - FLINK_CLIENT_SECRET=Wnrp0vD0ogkyP5dJxBlj1iYIPu2PTrAq
+      - KEYCLOAK_TOKEN_URL=http://keycloak:8080/realms/iceberg/protocol/openid-connect/token
+      - OAUTH_SCOPE=lakekeeper
+      # MinIO S3 configuration
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    networks:
+      - lakehouse-network
+    volumes:
+      - flink-checkpoints:/tmp/flink-checkpoints
+
+volumes:
+  flink-checkpoints:
+
+networks:
+  lakehouse-network:
+    name: lakehouse-network
+    external: true

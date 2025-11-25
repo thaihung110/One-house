@@ -22,9 +22,9 @@ ENV HADOOP_HOME=${HADOOP_HOME:-"/opt/hadoop"}
 RUN mkdir -p ${HADOOP_HOME} && mkdir -p ${SPARK_HOME}
 WORKDIR ${SPARK_HOME}
 
-RUN curl -L https://downloads.apache.org/spark/spark-3.5.6/spark-3.5.6-bin-hadoop3.tgz -o spark-3.5.6-bin-hadoop3.tgz \
-    && tar xvzf spark-3.5.6-bin-hadoop3.tgz --directory /opt/spark --strip-components 1 \
-    && rm -rf spark-3.5.6-bin-hadoop3.tgz
+RUN curl -L https://downloads.apache.org/spark/spark-3.5.7/spark-3.5.7-bin-hadoop3.tgz -o spark-3.5.7-bin-hadoop3.tgz \
+    && tar xvzf spark-3.5.7-bin-hadoop3.tgz --directory /opt/spark --strip-components 1 \
+    && rm -rf spark-3.5.7-bin-hadoop3.tgz
 
 # Install Iceberg jars (runtime + aws bundle)
 ENV ICEBERG_VERSION=1.6.1
@@ -38,7 +38,7 @@ FROM spark-base as pyspark
 
 # Install python deps
 COPY requirements.txt .
-RUN pip3 install --prefer-binary -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip3 install --prefer-binary -r requirements.txt
 
 ENV PATH="/opt/spark/sbin:/opt/spark/bin:${PATH}"
 ENV SPARK_HOME="/opt/spark"

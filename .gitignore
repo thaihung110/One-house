@@ -23,3 +23,27 @@ openldap/config/*
 .idea/*
 
 trino/etc/catalog/*
+
+airflow/logs/*
+kafka1/data/*
+kafka2/data/*
+
+nifi/*
+
+# Data Source API
+datasource-api/__pycache__/
+datasource-api/*.pyc
+datasource-api/.env
+
+datasource-api/*
+docker-compose-datasource.yaml
+
+.cursor/
+
+airflow/dags/__pycache__/
+spark/apps/.ipynb_checkpoints
+spark/spark-logs
+openldap/data
+kafka1/*
+kafka2/*
+airflow/logs

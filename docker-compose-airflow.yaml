@@ -1,0 +1,124 @@
+version: "3.9"
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  # image: lakehouse-airflow:2.9.1-spark
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__FERNET_KEY: ""
+    JAVA_HOME: "/usr/lib/jvm/java-17-openjdk-amd64"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_admin:airflow_password@shared-db:5432/airflow_db
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow_admin:airflow_password@shared-db:5432/airflow_db
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__WEBSERVER__SECRET_KEY: "please-change-me"
+    _PIP_ADDITIONAL_REQUIREMENTS: "apache-airflow-providers-apache-kafka==1.4.1 apache-airflow-providers-apache-spark==4.0.1 requests confluent-kafka==2.6.0 pyspark==3.5.2"
+    AIRFLOW_CONN_SPARK_DEFAULT: "spark://spark-master:7077"
+    KAFKA_BOOTSTRAP_SERVERS: "kafka1:9092,kafka2:9092"
+    KAFKA_CONSUMER_GROUP_ID: "airflow-csv-listener"
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./spark/apps:/opt/airflow/spark-apps
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  redis:
+    container_name: airflow-redis
+    image: redis:7
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: "no"
+    networks:
+      - lakehouse-network
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    command: >
+      bash -c "
+        until PGPASSWORD=airflow_password pg_isready -h shared-db -p 5432 -U airflow_admin;
+        do
+          echo 'Waiting for shared-db...';
+          sleep 2;
+        done;
+        airflow db migrate &&
+        (airflow users list | grep -q '^admin ' || airflow users create --role Admin --username admin --password admin --firstname Air --lastname Flow --email admin@example.com)
+      "
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - lakehouse-network
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8088:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: "no"
+    networks:
+      - lakehouse-network
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    restart: "no"
+    networks:
+      - lakehouse-network
+
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: airflow-triggerer
+    command: triggerer
+    restart: "no"
+    networks:
+      - lakehouse-network
+
+  airflow-worker:
+    <<: *airflow-common
+    container_name: airflow-worker
+    command: celery worker
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "celery --app airflow.executors.celery_executor.app inspect ping -d celery@$$HOSTNAME"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: "no"
+    networks:
+      - lakehouse-network
+
+  airflow-flower:
+    <<: *airflow-common
+    container_name: airflow-flower
+    command: celery flower
+    ports:
+      - "5555:5555"
+    restart: "no"
+    networks:
+      - lakehouse-network
+
+networks:
+  lakehouse-network:
+    name: lakehouse-network
+    driver: bridge

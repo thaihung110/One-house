@@ -45,6 +45,7 @@ services:
       /usr/bin/mc ls bronze || /usr/bin/mc mb bronze;
       /usr/bin/mc ls minio/silver || /usr/bin/mc mb minio/silver;
       /usr/bin/mc ls minio/gold || /usr/bin/mc mb minio/gold;
+      /usr/bin/mc ls minio/flink || /usr/bin/mc mb minio/flink;
       echo 'Buckets initialized successfully';
       "
     networks:
@@ -99,6 +100,7 @@ services:
     pull_policy: always
     environment:
       - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+      # Shared multi-tenant Postgres instance (lakekeeper, openfga, keycloak, airflow, etc.)
       - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://lakekeeper_admin:lakekeeper_password@shared-db:5432/lakekeeper_db
       - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://lakekeeper_admin:lakekeeper_password@shared-db:5432/lakekeeper_db
       - LAKEKEEPER__AUTHZ_BACKEND=openfga
@@ -165,6 +167,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
+      # Seeds dedicated DBs/users for keycloak, lakekeeper, openfga, and airflow
       - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
       - shared-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -179,7 +182,7 @@ services:
       - lakehouse-network
 
   openfga-migrate:
-    image: openfga/openfga:v1.8
+    image: openfga/openfga
     container_name: openfga-migrate
     command: migrate
     environment:
@@ -192,19 +195,24 @@ services:
       - lakehouse-network
 
   openfga:
-    image: openfga/openfga:v1.8
+    image: openfga/openfga
     container_name: openfga
     command: run
     environment:
       - OPENFGA_DATASTORE_ENGINE=postgres
       - OPENFGA_DATASTORE_URI=postgres://openfga_admin:openfga_password@shared-db:5432/openfga_db?sslmode=disable
       - OPENFGA_DATASTORE_MAX_OPEN_CONNS=50
-      - OPENFGA_PLAYGROUND_ENABLED=false
+      - OPENFGA_PLAYGROUND_ENABLED=true
+      - OPENFGA_HTTP_ADDR=localhost:8080
     healthcheck:
       test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=openfga:8081"]
       interval: 5s
       timeout: 30s
       retries: 3
+    ports:
+      - "3333:3000"
+      - "8080:8080"
+      - "8086:8081"
     depends_on:
       shared-db:
         condition: service_healthy
