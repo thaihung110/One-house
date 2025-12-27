@@ -12,6 +12,7 @@ import data.trino
 # ============================================================================
 
 # ShowTables - user needs SHOW_TABLES privilege
+# Allow if user has describe permission on schema (namespace level)
 allow_table if {
     input.action.operation == "ShowTables"
     catalog_name := trino.get_catalog_name(input.action.resource)
@@ -24,9 +25,15 @@ allow_table if {
 }
 
 # CreateTable - user needs CREATE_TABLE privilege
+# Check at namespace level (table doesn't exist yet)
 allow_table if {
     input.action.operation == "CreateTable"
-    resource := trino.build_resource(input.action.resource)
+    catalog_name := trino.get_catalog_name(input.action.resource)
+    schema_name := trino.get_schema_name(input.action.resource)
+    resource := {
+        "catalog_name": catalog_name,
+        "schema_name": schema_name,
+    }
     rbac.check_permission(trino.user_id, resource, "CreateTable")
 }
 
@@ -116,11 +123,26 @@ allow_table if {
 }
 
 # FilterTables - filter tables based on user permissions
+# Allow if user has describe permission on table (table level)
 allow_table if {
     input.action.operation == "FilterTables"
     resource := trino.build_resource(input.action.resource)
     rbac.check_permission(trino.user_id, resource, "FilterTables")
 }
+
+# Fallback 1: allow if user has describe permission on schema (namespace level)
+# This allows users with schema-level access to see all tables in that schema
+allow_table if {
+    input.action.operation == "FilterTables"
+    catalog_name := trino.get_catalog_name(input.action.resource)
+    schema_name := trino.get_schema_name(input.action.resource)
+    resource := {
+        "catalog_name": catalog_name,
+        "schema_name": schema_name,
+    }
+    rbac.check_permission(trino.user_id, resource, "ShowTables")
+}
+
 
 # AddColumn, DropColumn, RenameColumn, SetColumnComment - UPDATE_TABLE
 allow_table if {

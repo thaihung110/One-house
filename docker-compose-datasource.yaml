@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  datasource-db:
+    image: postgres:16
+    container_name: datasource-db
+    restart: "no"
+    environment:
+      POSTGRES_USER: datasource_admin
+      POSTGRES_PASSWORD: datasource_password
+      POSTGRES_DB: datasource_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./datasource-api/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - datasource-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datasource_admin -d datasource_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "5435:5432"
+    networks:
+      - lakehouse-network
+
+  datasource-api:
+    build:
+      context: ./datasource-api
+      dockerfile: Dockerfile
+    container_name: datasource-api
+    restart: "no"
+    ports:
+      - "8083:8000"
+    environment:
+      DB_HOST: datasource-db
+      DB_PORT: 5432
+      DB_NAME: datasource_db
+      DB_USER: datasource_admin
+      DB_PASSWORD: datasource_password
+      KAFKA_BOOTSTRAP_SERVERS: kafka1:9092,kafka2:9092
+      KAFKA_TOPIC: csv-upload-events
+    depends_on:
+      datasource-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - lakehouse-network
+
+volumes:
+  datasource-db-data:
+
+networks:
+  lakehouse-network:
+    name: lakehouse-network
+    external: true

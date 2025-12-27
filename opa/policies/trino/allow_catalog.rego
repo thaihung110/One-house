@@ -1,4 +1,9 @@
 # Catalog-level authorization rules
+#
+# Note: The Permission API automatically resolves catalog_name to warehouse name
+# (using mapping if catalog name differs from warehouse name) and checks warehouse permissions.
+# So if a user has permission on a warehouse, they automatically have permission
+# on the corresponding catalog (e.g., catalog "lakekeeper" -> warehouse "bronze").
 
 package trino
 
@@ -12,6 +17,7 @@ import data.trino
 # ============================================================================
 
 # AccessCatalog - user needs ACCESS_CATALOG privilege
+# The Permission API will check warehouse permission (catalog name = warehouse name)
 allow_catalog if {
     input.action.operation == "AccessCatalog"
     catalog_name := trino.get_catalog_name(input.action.resource)
@@ -20,6 +26,7 @@ allow_catalog if {
 }
 
 # CreateCatalog - user needs CREATE_CATALOG privilege
+# The Permission API will check warehouse permission
 allow_catalog if {
     input.action.operation == "CreateCatalog"
     catalog_name := trino.get_catalog_name(input.action.resource)
@@ -28,6 +35,7 @@ allow_catalog if {
 }
 
 # DropCatalog - user needs DROP_CATALOG privilege
+# The Permission API will check warehouse permission
 allow_catalog if {
     input.action.operation == "DropCatalog"
     catalog_name := trino.get_catalog_name(input.action.resource)
@@ -36,6 +44,7 @@ allow_catalog if {
 }
 
 # FilterCatalogs - filter catalogs based on user permissions
+# The Permission API will check warehouse permission
 allow_catalog if {
     input.action.operation == "FilterCatalogs"
     catalog_name := trino.get_catalog_name(input.action.resource)

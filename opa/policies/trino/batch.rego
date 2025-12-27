@@ -38,25 +38,5 @@ batch contains i if {
 # COLUMN MASKING
 # ============================================================================
 
-# Default: empty array - ensures Trino always gets a valid response
-default batchColumnMasks := []
-
-# TODO: Implement column masking if needed
-# Column masking would check relation.columns field in RBAC API
-# For now, no columns are masked
-#
-# Example implementation:
-# batchColumnMasks := masks if {
-#     input.action.operation == "GetColumnMask"
-#     masks := [mask |
-#         some idx
-#         column_resource := input.action.filterResources[idx].column
-#         # Check if column should be masked via RBAC API
-#         # If yes, add to masks array with NULL expression
-#         mask := {
-#             "index": idx,
-#             "viewExpression": {"expression": "NULL"}
-#         }
-#     ]
-# }
+# batchColumnMasks is defined in column_mask.rego
 

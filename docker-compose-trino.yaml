@@ -42,13 +42,15 @@ services:
       - LAKEKEEPER_SCOPE=lakekeeper
       - TRINO_LAKEKEEPER_CATALOG_NAME=lakekeeper
       - LAKEKEEPER_LAKEKEEPER_WAREHOUSE=bronze
+      - PERMISSION_API_URL=http://permission-api:8000
+      - PERMISSION_API_TIMEOUT=2s
     ports:
       - "8182:8181"
-    depends_on:
-      rbac-api:
-        condition: service_started
-      # init-client-opa:
-      #   condition: service_completed_successfully
+    # depends_on:
+    #   permission-api:
+    #     condition: service_healthy
+    # init-client-opa:
+    #   condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8181/health"]
       interval: 5s
@@ -62,6 +64,8 @@ services:
       - "localhost:host-gateway" # Allow container to access host's localhost
     environment:
       - OIDC_ISSUER=http://localhost:30080/realms/iceberg
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
     healthcheck:
       test: ["CMD", "curl", "-I", "http://localhost:8080/v1/status"]
       interval: 2s
@@ -112,33 +116,21 @@ services:
     networks:
       - lakehouse-network
 
-  rbac-db:
-    image: postgres:17
-    container_name: rbac-db
-    environment:
-      - POSTGRES_USER=rbac
-      - POSTGRES_PASSWORD=rbac
-      - POSTGRES_DB=rbac
-    ports:
-      - 5433:5432
-    volumes:
-      - ./rbac-db/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - rbac-db-data:/var/lib/postgresql/data
-    networks:
-      - lakehouse-network
-
-  rbac-api:
-    image: hungvt0110/rbac-api:latest
-    container_name: rbac-api
-    environment:
-      - DB_DSN=postgresql+asyncpg://rbac:rbac@rbac-db/rbac
-    ports:
-      - 8000:8000
-    depends_on:
-      rbac-db:
-        condition: service_started
-    networks:
-      - lakehouse-network
+  # permission-api:
+  #   build:
+  #     context: ./permission-api
+  #     dockerfile: Dockerfile
+  #   container_name: permission-api
+  #   environment:
+  #     - LAKEKEEPER_DB_URL=postgresql://lakekeeper_admin:lakekeeper_password@shared-db:5432/lakekeeper_db
+  #     - OPENFGA_API_URL=http://openfga:8080
+  #     - OPENFGA_STORE_ID=${OPENFGA_STORE_ID:-01K7JW3M6HNP3QR5HJRERDCAYR}
+  #     - PORT=8000
+  #     - HOST=0.0.0.0
+  #   ports:
+  #     - "8001:8000"
+  #   networks:
+  #     - lakehouse-network
 
   openldap:
     image: osixia/openldap:1.5.0
@@ -159,6 +151,3 @@ networks:
   lakehouse-network:
     name: lakehouse-network
     external: true
-
-volumes:
-  rbac-db-data:

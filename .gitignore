@@ -35,8 +35,8 @@ datasource-api/__pycache__/
 datasource-api/*.pyc
 datasource-api/.env
 
-datasource-api/*
-docker-compose-datasource.yaml
+
+
 
 .cursor/
 
@@ -47,3 +47,10 @@ openldap/data
 kafka1/*
 kafka2/*
 airflow/logs
+
+certs/*
+auth_model.txt
+docs/*
+
+
+fga_0.7.8_linux_amd64.deb

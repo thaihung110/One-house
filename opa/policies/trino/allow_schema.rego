@@ -68,6 +68,8 @@ allow_schema if {
 }
 
 # FilterSchemas - filter schemas based on user permissions
+# Allow if user has describe permission on schema (namespace level)
+# OR if user has describe permission on catalog (catalog level - inherits to all schemas)
 allow_schema if {
     input.action.operation == "FilterSchemas"
     catalog_name := trino.get_catalog_name(input.action.resource)
@@ -77,5 +79,14 @@ allow_schema if {
         "schema_name": schema_name,
     }
     rbac.check_permission(trino.user_id, resource, "FilterSchemas")
+}
+
+# Fallback: allow if user has describe on catalog (catalog-level permission)
+# This allows users with catalog-level access to see all schemas
+allow_schema if {
+    input.action.operation == "FilterSchemas"
+    catalog_name := trino.get_catalog_name(input.action.resource)
+    resource := {"catalog_name": catalog_name}
+    rbac.check_permission(trino.user_id, resource, "ShowSchemas")
 }
 

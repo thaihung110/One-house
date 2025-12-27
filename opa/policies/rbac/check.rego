@@ -1,4 +1,4 @@
-# Permission check logic against RBAC API
+# Permission check logic against Permission API
 
 package rbac
 
