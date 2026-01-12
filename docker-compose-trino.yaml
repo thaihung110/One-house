@@ -60,6 +60,8 @@ services:
   trino-opa:
     image: trinodb/trino:467
     container_name: trino-opa
+    ports:
+      - "8081:8080" # Expose Trino port for direct access with username/password
     extra_hosts:
       - "localhost:host-gateway" # Allow container to access host's localhost
     environment:

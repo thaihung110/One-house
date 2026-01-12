@@ -42,7 +42,7 @@ services:
     entrypoint: >
       /bin/sh -c "
       until (/usr/bin/mc alias set minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
-      /usr/bin/mc ls bronze || /usr/bin/mc mb bronze;
+      /usr/bin/mc ls minio/bronze || /usr/bin/mc mb minio/bronze;
       /usr/bin/mc ls minio/silver || /usr/bin/mc mb minio/silver;
       /usr/bin/mc ls minio/gold || /usr/bin/mc mb minio/gold;
       /usr/bin/mc ls minio/flink || /usr/bin/mc mb minio/flink;
@@ -253,6 +253,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      lakekeeper-bootstrap:
+        condition: service_completed_successfully
     restart: "no" # exit when complete
     networks:
       - lakehouse-network
