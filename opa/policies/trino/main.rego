@@ -1,5 +1,5 @@
-# Main entry point for Trino authorization
-# Aggregates all authorization rules
+#! Main entry point for Trino authorization
+#! Aggregates all authorization rules
 
 package trino
 
@@ -13,6 +13,12 @@ import data.trino
 
 # Default deny
 default allow := false
+
+# Allow all operations on Trino system catalog (e.g. system.jdbc.*)
+# These are internal metadata queries and should not be blocked by RBAC.
+allow if {
+    trino.is_system_catalog_operation
+}
 
 # Allow if any catalog-level rule matches
 allow if {

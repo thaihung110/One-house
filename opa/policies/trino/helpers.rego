@@ -1,5 +1,4 @@
-# Helper functions for resource extraction and building
-
+#! Helper functions for resource extraction and building
 package trino
 
 import rego.v1
@@ -148,5 +147,19 @@ maybe_add_columns(base, input_resource) := object.union(base, {"columns": column
 
 maybe_add_columns(base, input_resource) := base if {
     not has_columns(input_resource)
+}
+
+# ============================================================================
+# SYSTEM CATALOG HELPERS
+# ============================================================================
+
+# Predicate: is this operation targeting the Trino system catalog?
+#
+# Many Trino internal metadata queries use catalog `system` (e.g. system.jdbc.*).
+# We don't want to enforce RBAC on these technical/system objects, so OPA
+# can allow all operations when the catalog is `system`.
+is_system_catalog_operation if {
+    catalog_name := get_catalog_name(input.action.resource)
+    catalog_name == "system"
 }
 
