@@ -16,23 +16,26 @@ import data.trino
 # Get row filter from Permission API
 # Returns SQL WHERE clause or null
 get_row_filter() := filter if {
-    # Only for SelectFromColumns operation
-    input.action.operation == "SelectFromColumns"
+    # For GetRowFilters operation (Trino's row filter endpoint)
+    input.action.operation == "GetRowFilters"
     
-    # Build table FQN
-    catalog_name := trino.get_catalog_name(input.action.resource)
-    schema_name := trino.get_schema_name(input.action.resource)
-    table_name := trino.get_table_name(input.action.resource)
+    # Extract user from context
+    user_id := input.context.identity.user
+    
+    # Extract table info from resource
+    catalog_name := input.action.resource.table.catalogName
+    schema_name := input.action.resource.table.schemaName
+    table_name := input.action.resource.table.tableName
     
     # Call Permission API
     response := http.send({
         "method": "POST",
-        "url": sprintf("%s/permissions/row-filter", [configuration.permission_api_url]),
+        "url": sprintf("%s/api/v1/permissions/row-filter", [configuration.permission_api_url]),
         "headers": {
             "Content-Type": "application/json"
         },
         "body": {
-            "user_id": trino.user_id,
+            "user_id": user_id,
             "resource": {
                 "catalog_name": catalog_name,
                 "schema_name": schema_name,
